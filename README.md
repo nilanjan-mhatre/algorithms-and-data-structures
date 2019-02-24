@@ -28,4 +28,7 @@
 1. Dijkstra Algorithm for shortest path
 2. Prim's Algorithm for minimum Spanning tree
 
-![](Nilanjan_Mhatre_Project_2/pics/instructions.png)
+![](Nilanjan_Mhatre_Project_2/pics/instructions.PNG)
+![](Nilanjan_Mhatre_Project_2/pics/graph.PNG)
+![](Nilanjan_Mhatre_Project_2/pics/dijsktra.PNG)
+![](Nilanjan_Mhatre_Project_2/pics/prims.PNG)
