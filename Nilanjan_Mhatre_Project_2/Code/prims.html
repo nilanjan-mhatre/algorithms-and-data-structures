@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.links line.link {
+  stroke: #999;
+  stroke-opacity: 0.6;
+  stroke-width: 5px;
+}
+
+.links line.green {
+  stroke: #292;
+  stroke-opacity: 0.6;
+  stroke-width: 15px;
+}
+
+.nodes circle {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+svg { background: #601600; border: 2px solid #8899EE;}
+.no-margin {
+	margin-left: 0px !important;
+	margin-right: 0px !important;
+}
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="priority-queue.js"></script>
+
+<body>
+	<div class="row no-margin">
+		<div class="col-sm-4"></div>
+		<div class="col-sm-4 text-primary">
+			<h1>Prim's and Jarnik's Algorithm</h1>
+		</div>
+	</div>
+	<div class="row no-margin">
+		<div class="col-sm-1">
+			<button class="btn btn-link glyphicon glyphicon-info-sign" onclick="showInstructions();">Instructions</button>
+		</div>
+		<div class="col-sm-5">
+			<div class="row">
+				<input class="btn btn-primary col-sm-4" type="button" onclick="loadFile()" value="Load"></input>
+				<input class="btn btn-file col-sm-8" type="file" id="file_input"></input>
+			</div>
+		</div>
+		<div class="col-sm-2">
+		</div>
+	</div>
+	<div class="row no-margin">
+		<div class="col-sm-8" id="svg_graph"><svg></svg></div>
+		<div class="col-sm-3" style="overflow-x:scroll; overflow-y:scroll; height:650px; outline: 2px solid black;">
+			<div class="row" id="source_node">
+			</div>
+			<div class="row" id="paths">
+			</div>
+			
+		</div>
+	</div>
+
+	<div id="instructions" class="modal fade">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h2 class="modal-title">Instructions</h2>
+				</div>
+				<div class="modal-body">
+					1. Browse the file<br/>
+					2. Click Load<br/>
+					3. The graph will be created (Note: Sometimes the graph is created at the left corner)<br/>
+					4. Drag the graph and adjust it as per required<br/>
+					5. To Run the Algorithm, click on any node as a starting node (Note: Click on the circle, not on the text inside that circle)<br/>
+					6. The Spanning tree details will be populated and the links will be highlighted<br/>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+
+<script>
+
+var svg = d3.select("#svg_graph").select("svg")
+        .attr("width", 1000)
+        .attr("height", 650),
+    width = 1000,
+    height = 650;
+
+var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+var simulation = d3.forceSimulation()
+	.force("link", d3.forceLink().id(function(d) { return d.id; })
+	.distance(function(d) {return 200;}).strength(0.1))
+	.force("charge", d3.forceManyBody())
+	.force("center", d3.forceCenter(width / 2, height / 2));
+
+var g = [];
+var p = [];
+var nodes = [];
+var links = [];
+var start = -1;
+var end = -1;
+
+function showInstructions() {
+	$("#instructions").modal("show");
+}
+
+//Load contents of the file
+function loadFile() {
+	var file = document.getElementById('file_input').files[0];
+	if(file == undefined) {
+		return;
+	}
+	$("#source_node").html("");
+	$("#paths").html("");
+
+	var graph = {};
+	var nodesJsonData = [];
+	var linksJsonData = [];
+	var allNodes = new Array();
+	var reader = new FileReader();
+	reader.readAsText(file);
+	reader.onload = function(e) {
+		var str = e.target.result;
+		var edges = str.split("\n");
+		for(i=1; i<edges.length - 1; i++) {
+			var vertices = edges[i].split(" ");
+			if($.inArray(vertices[0], allNodes) == -1) {
+				allNodes.push(vertices[0]);
+				var nodeValue = {"id":vertices[0], "group":1};
+				nodesJsonData.push(nodeValue);
+			}
+			if($.inArray(vertices[1], allNodes) == -1) {
+				allNodes.push(vertices[1]);
+				var nodeValue = {"id":vertices[1], "group":1};
+				nodesJsonData.push(nodeValue);
+			}
+
+			var linkValue = {"source": vertices[0], "target": vertices[1], "value": vertices[2]};
+			linksJsonData.push(linkValue);
+		}
+		graph.nodes = nodesJsonData;
+		graph.links = linksJsonData;
+		showNodes(graph);
+	};
+
+	resetData();
+}
+
+function resetData() {
+	start = -1;
+	end = -1
+}
+
+// Draw the graph
+function showNodes(graph) {
+	simulation = d3.forceSimulation()
+    	.force("link", d3.forceLink().id(function(d) { return d.id; })
+		.distance(function(d) {return 150;}).strength(0.1))
+		.force("charge", d3.forceManyBody())
+		.force("center", d3.forceCenter(width / 2, height / 2));
+	d3.selectAll(".nodes").remove();
+	d3.selectAll(".links").remove();
+	
+	prepareData(graph.nodes, graph.links);
+
+	var link = svg.append("g")
+		.attr("class", "links")
+		.selectAll("line")
+		.data(graph.links)
+		.enter().append("line")
+		.attr("class", "link")
+		.attr("stroke-width", function(d) { return Math.sqrt(d.value); });
+
+
+	var node = svg.append("g")
+		.attr("class", "nodes")
+		.selectAll(".node")
+		.data(graph.nodes)
+		.enter().append("g")
+		.attr("class", "node")
+		.call(d3.drag()
+			.on("start", dragstarted)
+			.on("drag", dragged)
+			.on("end", dragended))
+		.on("click", function() {
+			node.filter(function(d) {
+					return true;
+			}).style("stroke", "black");
+			d3.select(this).style("stroke", "red");
+		});
+
+	node.append("title")
+		.text(function(d) { return d.id; });
+
+	node.append("circle")
+		.attr("r", 20)
+		.attr("fill", function(d) { return color(d.group); })
+		.on("click", function(d) {
+			link.filter(function(d) {
+					return true;
+					}).attr('class', "link");
+			primsAlgo(d);
+			link.filter(function(d) {
+				for(i=0; i<p.length; i++) {
+					if(p[i] > -1) {
+						if((nodes[i].id == d.source.id && nodes[p[i]].id == d.target.id)
+							|| (nodes[p[i]].id == d.source.id && nodes[i].id == d.target.id)) {
+							return true;
+						}
+					}
+				}
+				return false;
+			}).attr('class', "green");
+
+		});
+
+	node.append("text")
+		.text(function(d) { return d.id; });
+
+	link.append("text")
+		.text(function(d) {
+		return d.value;
+	});
+
+
+	simulation
+		.nodes(graph.nodes)
+		.on("tick", ticked);
+
+	simulation.force("link")
+		.links(graph.links);
+
+	function ticked() {
+		link.attr("x1", function(d) {
+				return d.source.x;
+			})
+			.attr("y1", function(d) { return d.source.y; })
+			.attr("x2", function(d) { return d.target.x; })
+			.attr("y2", function(d) { return d.target.y; });
+
+		link.select("text").attr("x", function(d) {
+							return d.source.x;
+						}).attr("y", function(d) { return d.source.y; })
+
+		node
+			.attr("cx", function(d) { return d.x; })
+			.attr("cy", function(d) { return d.y; });
+
+		node
+			.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+	}
+}
+
+function dragstarted(d) {
+	if (!d3.event.active) {
+		simulation.alphaTarget(0.3).restart();
+	}
+	d.fx = d.x;
+	d.fy = d.y;
+}
+
+function dragged(d) {
+	d.fx = d3.event.x;
+	d.fy = d3.event.y;
+}
+
+function dragended(d) {
+	if (!d3.event.active) {
+		simulation.alphaTarget(0);
+	}
+	d.fx = null;
+	d.fy = null;
+}
+
+// Create the adjacency list
+function prepareData(allNodes, allLinks) {
+	nodes = allNodes;
+	links = allLinks;
+	g = new Array(nodes.length);
+
+	for(j=0; j<nodes.length; j++) {
+		g[j] = [];
+	}
+	for(i=0; i<links.length; i++) {
+		var source = links[i].source;
+		var destination = links[i].target;
+		var value = links[i].value;
+		var sourceId = -1;
+		var destinationId = -1;
+
+		for(j=0; j<nodes.length; j++) {
+			if(source == nodes[j].id) {
+				sourceId = j;
+			}
+			if(destination == nodes[j].id) {
+				destinationId = j;
+			}
+		}
+		if(sourceId >=0 && destinationId >= 0) {
+			g[sourceId].push({ "vertex": destinationId, "weight": parseInt(value)});
+			g[destinationId].push({ "vertex": sourceId, "weight": parseInt(value)});
+		}
+	}
+}
+
+function primsAlgo(sourceNode) {
+	$("#source_node").html("Minimum Spanning tree starting from  " + sourceNode.id);
+
+	var numberOfNodes = g.length;
+	var d = new Array(numberOfNodes);
+	p = new Array(numberOfNodes);
+	var current = 0;
+	var source = 0;
+
+	// Create a heap data structure
+	var compareNodes = function(a, b) { return a.value - b.value; };
+	var queue = new PriorityQueue({ comparator: compareNodes });
+	queue.findElement = function(id) {
+		return this.priv.data.filter(function(d) {
+			return d.id === id;
+		});
+	}
+	for(i=0; i<nodes.length; i++) {
+		if(sourceNode.id == nodes[i].id) {
+			start = current = source = i;
+		}
+	}
+
+	for (i = 0; i < numberOfNodes; i++) {
+		if(current == i) {
+			queue.queue({"value": 0, "id": i});
+		} else {
+			queue.queue({"value": 9007199254740992, "id": i});
+		}
+		d[i] = 0;
+		p[i] = -1;
+	}
+
+	//Start of Algorithm
+	d[current] = 0;
+	var c = 0;
+	var dc = queue.dequeue().value;
+	while (c != g.length-1) {
+		var adj = g[current];
+		$.each(adj, function() {
+			var eleArr = queue.findElement(this.vertex);
+			if(eleArr.length > 0) {
+				var ele = eleArr[0];
+				if (this.weight != 0 && this.weight < ele.value) {
+					ele.value = this.weight;
+					d[this.vertex] = ele.value;
+					p[this.vertex] = current;
+					queue.priv._heapify();
+				}
+			}
+		});
+		if(queue.length == 0) {
+			break;
+		}
+		var nextEle = queue.dequeue();
+		dc = nextEle.value;
+		current = nextEle.id;
+	}
+
+	//Display the paths
+	var str = "";
+	var totalCost = 0;
+	for (i = 0; i < p.length; i++) {
+		if(p[i] > -1) {
+			str += "<br/><br/>Edge: " + nodes[p[i]].id + " to " + nodes[i].id
+						+ " Weight: " +d[i];
+			totalCost += d[i];
+		}
+	}
+	str += "<br/><br/>Total Cost: " + totalCost;
+	$("#paths").html(str);
+}
+
+</script>
